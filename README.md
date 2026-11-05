@@ -58,7 +58,7 @@ Aplikasi ini menggunakan alur **Hybrid Smart Sync** dua tahap agar TV langsung b
 
 ## 🛠️ Panduan Pemasangan di Android TV
 
-1. Pindahkan file **`OfflineTimeKeeper_With_RamCleaner_Project.apk`** ke flashdisk, lalu pasang di TV Anda menggunakan aplikasi File Manager[cite: 2].
+1. Pindahkan file **`OfflineTimeKeeper.apk`** ke flashdisk, lalu pasang di TV Anda menggunakan aplikasi File Manager[cite: 2].
 2. **Pemberian Izin Sistem (Hanya dilakukan 1 kali saja):**
    * **Untuk TV Non-Root:** Hubungkan TV ke laptop via ADB, lalu ketik perintah[cite: 2]:
      ```bash
