@@ -51,22 +51,33 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val btnRestoreNow = Button(this).apply {
-            text = "Tes Pulihkan Waktu Terakhir"
+        val btnSyncOnline = Button(this).apply {
+            text = "Sinkronkan Jam Online Sekarang"
             setOnClickListener {
-                val last = getSharedPreferences("TimePrefs", Context.MODE_PRIVATE).getLong("last_time", 0L)
-                if (last > 0) {
-                    val ok = TimeHelper.restoreSystemTime(last)
-                    val msg = if (ok) "Berhasil memulihkan jam!" else "Gagal: Butuh izin ADB SET_TIME atau akses Root"
-                    Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
-                }
+                Toast.makeText(this@MainActivity, "Menghubungi server waktu...", Toast.LENGTH_SHORT).show()
+                Thread {
+                    val ntpTime = SntpHelper.getNetworkTime("pool.ntp.org", 4000)
+                        ?: SntpHelper.getNetworkTime("time.google.com", 4000)
+
+                    runOnUiThread {
+                        if (ntpTime != null) {
+                            TimeHelper.restoreSystemTime(ntpTime)
+                            getSharedPreferences("TimePrefs", Context.MODE_PRIVATE)
+                                .edit().putLong("last_time", ntpTime).apply()
+                            updateStatusText(statusView)
+                            Toast.makeText(this@MainActivity, "Jam berhasil disinkronkan ke waktu online!", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(this@MainActivity, "Gagal mendapatkan waktu online (Cek Internet)", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }.start()
             }
         }
 
         layout.addView(titleView)
         layout.addView(statusView)
         layout.addView(btnSaveNow)
-        layout.addView(btnRestoreNow)
+        layout.addView(btnSyncOnline)
         setContentView(layout)
 
         updateStatusText(statusView)
@@ -86,6 +97,6 @@ class MainActivity : AppCompatActivity() {
         val lastStr = if (lastTime > 0) sdf.format(Date(lastTime)) else "Belum ada"
         val nowStr = sdf.format(Date(System.currentTimeMillis()))
 
-        tv.text = "Jam Sistem Saat Ini: $nowStr\nWaktu Terakhir Tersimpan: $lastStr\n\nStatus Service: Aktif (Auto-Save tiap 3 menit)"
+        tv.text = "Jam Sistem: $nowStr\nTerakhir Disimpan: $lastStr\n\nStatus: Auto-Restore Offline + Auto-Sync Online Aktif"
     }
 }
