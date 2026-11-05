@@ -1,81 +1,42 @@
 package com.example.offlinetimekeeper
 
 import android.os.SystemClock
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 
 object SntpHelper {
-
+    private const val NTP_PACKET_SIZE = 48
     private const val NTP_PORT = 123
-    private const val NTP_TIMEOUT_MS = 5000 // Batas waktu tunggu respons (5 detik)
     private const val NTP_MODE_CLIENT = 3
     private const val NTP_VERSION = 3
-
-    // Selisih antara era NTP (1900) dan UNIX epoch (1970) dalam detik
+    private const val TRANSMIT_TIME_OFFSET = 40
     private const val OFFSET_1900_TO_1970 = 2208988800L
 
-    // Daftar server NTP publik yang andal
-    private val NTP_SERVERS = listOf(
-        "pool.ntp.org",
-        "id.pool.ntp.org",
-        "time.google.com",
-        "time.cloudflare.com"
-    )
-
-    /**
-     * Mengambil waktu aktual (Epoch Millis) dari server NTP secara asynchronous.
-     * Mengembalikan null jika semua server gagal dihubungi/koneksi bermasalah.
-     */
-    suspend fun fetchCurrentTime(): Long? = withContext(Dispatchers.IO) {
-        for (server in NTP_SERVERS) {
-            val time = queryServer(server)
-            if (time != null) {
-                return@withContext time
-            }
-        }
-        null
-    }
-
-    private fun queryServer(host: String): Long? {
+    fun getNetworkTime(host: String = "pool.ntp.org", timeout: Int = 4000): Long? {
         var socket: DatagramSocket? = null
         return try {
+            socket = DatagramSocket()
+            socket.soTimeout = timeout
             val address = InetAddress.getByName(host)
-            val buffer = ByteArray(48)
-            buffer[0] = ((NTP_VERSION shl 3) or NTP_MODE_CLIENT).toByte()
+            val buffer = ByteArray(NTP_PACKET_SIZE)
+            buffer[0] = (NTP_MODE_CLIENT or (NTP_VERSION shl 3)).toByte()
 
             val requestTime = System.currentTimeMillis()
             val requestTicks = SystemClock.elapsedRealtime()
-            writeTimeStamp(buffer, 40, requestTime)
+            writeTimeStamp(buffer, TRANSMIT_TIME_OFFSET, requestTime)
 
-            socket = DatagramSocket().apply {
-                soTimeout = NTP_TIMEOUT_MS
-            }
+            val request = DatagramPacket(buffer, buffer.size, address, NTP_PORT)
+            socket.send(request)
 
-            val requestPacket = DatagramPacket(buffer, buffer.size, address, NTP_PORT)
-            socket.send(requestPacket)
-
-            val responsePacket = DatagramPacket(buffer, buffer.size)
-            socket.receive(responsePacket)
-
+            val response = DatagramPacket(buffer, buffer.size)
+            socket.receive(response)
             val responseTicks = SystemClock.elapsedRealtime()
-            val responseTime = requestTime + (responseTicks - requestTicks)
 
-            // Baca timestamp dari respons NTP
-            val originateTime = readTimeStamp(buffer, 24)
-            val receiveTime = readTimeStamp(buffer, 32)
-            val transmitTime = readTimeStamp(buffer, 40)
-
-            // Hitung koreksi selisih waktu jaringan (clock offset)
-            val roundTripDelay = (responseTicks - requestTicks) - (transmitTime - receiveTime)
-            val clockOffset = ((receiveTime - originateTime) + (transmitTime - responseTime)) / 2
-
-            // Waktu aktual sekarang dihitung dari titik acuan
-            responseTime + clockOffset
+            val transmitTime = readTimeStamp(buffer, TRANSMIT_TIME_OFFSET)
+            val roundTripTime = responseTicks - requestTicks
+            transmitTime + (roundTripTime / 2)
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         } finally {
             socket?.close()
@@ -83,35 +44,31 @@ object SntpHelper {
     }
 
     private fun readTimeStamp(buffer: ByteArray, offset: Int): Long {
-        val seconds = read32(buffer, offset)
-        val fraction = read32(buffer, offset + 4)
-        return ((seconds - OFFSET_1900_TO_1970) * 1000) + ((fraction * 1000) / 0x100000000L)
+        var seconds = 0L
+        for (i in 0..3) {
+            val b = buffer[offset + i].toLong() and 0xff
+            seconds = (seconds shl 8) or b
+        }
+        var fraction = 0L
+        for (i in 4..7) {
+            val b = buffer[offset + i].toLong() and 0xff
+            fraction = (fraction shl 8) or b
+        }
+        return (seconds - OFFSET_1900_TO_1970) * 1000L + (fraction * 1000L / 0x100000000L)
     }
 
     private fun writeTimeStamp(buffer: ByteArray, offset: Int, time: Long) {
-        val seconds = time / 1000L
-        val milliseconds = time - (seconds * 1000L)
-        val ntpSeconds = seconds + OFFSET_1900_TO_1970
-
-        // Tulis detik
-        buffer[offset] = (ntpSeconds shr 24).toByte()
-        buffer[offset + 1] = (ntpSeconds shr 16).toByte()
-        buffer[offset + 2] = (ntpSeconds shr 8).toByte()
-        buffer[offset + 3] = (ntpSeconds shr 0).toByte()
-
-        // Tulis pecahan detik
-        val fraction = (milliseconds * 0x100000000L) / 1000L
-        buffer[offset + 4] = (fraction shr 24).toByte()
-        buffer[offset + 5] = (fraction shr 16).toByte()
-        buffer[offset + 6] = (fraction shr 8).toByte()
-        buffer[offset + 7] = (fraction shr 0).toByte()
-    }
-
-    private fun read32(buffer: ByteArray, offset: Int): Long {
-        val b0 = buffer[offset].toLong() and 0xFF
-        val b1 = buffer[offset + 1].toLong() and 0xFF
-        val b2 = buffer[offset + 2].toLong() and 0xFF
-        val b3 = buffer[offset + 3].toLong() and 0xFF
-        return (b0 shl 24) or (b1 shl 16) or (b2 shl 8) or b3
+        val seconds = time / 1000L + OFFSET_1900_TO_1970
+        val fraction = ((time % 1000L) * 0x100000000L) / 1000L
+        var temp = seconds
+        for (i in 3 downTo 0) {
+            buffer[offset + i] = (temp and 0xff).toByte()
+            temp = temp ushr 8
+        }
+        temp = fraction
+        for (i in 7 downTo 4) {
+            buffer[offset + i] = (temp and 0xff).toByte()
+            temp = temp ushr 8
+        }
     }
 }
