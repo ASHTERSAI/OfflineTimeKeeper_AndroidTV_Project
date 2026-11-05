@@ -52,13 +52,13 @@ Aplikasi ini menggunakan alur **Hybrid Smart Sync** dua tahap agar TV langsung b
 2. Klik proses build terbaru yang bertanda **centang hijau (✅)**[cite: 2].
 3. Gulir layar ke bagian paling bawah ke tabel **Artifacts**[cite: 2].
 4. Klik tautan file yang muncul (misalnya: `OfflineTimeKeeper-NoRAM-APK` atau `OfflineTimeKeeper-Standard-APK`) untuk mengunduh arsip zip[cite: 2].
-5. Ekstrak file zip tersebut di laptop untuk mendapatkan file instalasi **`app-debug.apk`**[cite: 2].
+5. Ekstrak file zip tersebut di laptop untuk mendapatkan file instalasi **`OfflineTimeKeeper_With_RamCleaner_Project.apk`**[cite: 2].
 
 ---
 
 ## 🛠️ Panduan Pemasangan di Android TV
 
-1. Pindahkan file **`app-debug.apk`** ke flashdisk, lalu pasang di TV Anda menggunakan aplikasi File Manager[cite: 2].
+1. Pindahkan file **`OfflineTimeKeeper_With_RamCleaner_Project.apk`** ke flashdisk, lalu pasang di TV Anda menggunakan aplikasi File Manager[cite: 2].
 2. **Pemberian Izin Sistem (Hanya dilakukan 1 kali saja):**
    * **Untuk TV Non-Root:** Hubungkan TV ke laptop via ADB, lalu ketik perintah[cite: 2]:
      ```bash
