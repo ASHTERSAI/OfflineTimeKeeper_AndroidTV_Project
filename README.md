@@ -1,63 +1,76 @@
 # 📺 OfflineTimeKeeper_AndroidTV_Project
 
-Solusi otomatis dan mandiri untuk perangkat **Android TV** atau **STB Android** yang selalu mengalami reset jam/tanggal ke pengaturan pabrik setiap kali dimatikan (akibat baterai CMOS/RTC yang melemah), yang menyebabkan koneksi internet Wi-Fi/LAN gagal terhubung akibat penolakan sertifikat validasi SSL/TLS.
+Solusi otomatis dan mandiri untuk perangkat **Android TV** atau **STB Android** yang selalu mengalami reset jam/tanggal ke pengaturan pabrik setiap kali dimatikan total akibat baterai CMOS/RTC yang melemah[cite: 2], yang menyebabkan internet Wi-Fi/LAN gagal tersambung akibat penolakan sertifikat keamanan SSL/TLS jaringan.
 
-Proyek ini bekerja dengan sistem **Hybrid Smart Sync**: memulihkan waktu terakhir secara instan begitu TV dinyalakan (*offline boot restore*) agar internet bisa masuk, lalu secara otomatis menyinkronkan jam dan tanggal ke waktu presisi resmi dari server NTP internet begitu sinyal online terdeteksi—tanpa mematikan proses latar belakang atau mengosongkan RAM aplikasi lain.
+---
+
+## 🔄 Bagaimana Cara Kerjanya? (Sistem 2 Langkah Cerdas)
+
+Aplikasi ini menggunakan alur **Hybrid Smart Sync** dua tahap agar TV langsung bisa online secara mandiri:
+
+1. **Langkah 1 (Saat Booting / Offline):**
+   * TV menyala dengan kondisi jam reset ke tahun pabrik (misalnya 1 Januari 1970)[cite: 2].
+   * Aplikasi langsung memulihkan jam reset tersebut ke **jam terakhir yang tersimpan** sebelum TV dimatikan[cite: 39].
+   * **Tujuannya:** Menyelamatkan validitas sertifikat SSL/TLS sistem Android agar Wi-Fi/kabel LAN tidak menolak sambungan internet akibat tahun yang kedaluwarsa.
+
+2. **Langkah 2 (Begitu Sinyal Internet Masuk):**
+   * Karena internet sudah tidak terblokir sertifikat, TV berhasil mendapatkan sinyal online.
+   * Aplikasi langsung mendeteksi jaringan dan menghubungi server waktu resmi dunia via NTP (`pool.ntp.org` / `time.google.com`)[cite: 38].
+   * Jam TV otomatis ditimpa kembali dan disesuaikan ke **jam dan tanggal asli yang presisi** hingga satuan detik[cite: 38].
+   * Jam asli ini selanjutnya akan terus dicatat otomatis setiap 3 menit sekali sebagai cadangan saat TV dimatikan kembali[cite: 38].
 
 ---
 
 ## ✨ Fitur Utama
 
-* **Auto-Save Berkala (Background Service):** Menyimpan waktu sistem (`last_time`) ke `SharedPreferences` setiap 3 menit sekali secara otomatis di latar belakang.
-* **Proteksi Tahun Reset:** Dilengkapi filter validasi (Tahun >= 2025) agar aplikasi tidak sengaja menimpa data jam valid dengan tanggal reset bawaan pabrik saat TV baru menyala.
-* **Auto-Restore saat Booting (`BootReceiver`):** Mendeteksi sinyal sistem `BOOT_COMPLETED` dan `QUICKBOOT_POWERON`, lalu langsung memulihkan jam sistem ditambah kompensasi durasi booting (+30 detik) sebelum layanan jaringan memeriksa sertifikat.
-* **Smart Online NTP Sync (`SntpHelper`):** Memantau status jaringan secara *real-time* via `ConnectivityManager.NetworkCallback`. Begitu TV terhubung ke sinyal internet (Wi-Fi atau LAN), aplikasi langsung mengambil data waktu terkini dari server NTP internasional (`pool.ntp.org`, `time.google.com`, `id.pool.ntp.org`) dan menyetel detik jam secara presisi.
-* **Dual-Method Time Setter (`TimeHelper`):**
-  * Menggunakan API standar Android (`SystemClock.setCurrentTimeMillis`) melalui izin `SET_TIME` via ADB.
-  * Otomatis *fallback* menggunakan perintah shell Superuser (`su -c date`) jika perangkat sudah dalam keadaan Root (Magisk).
-* **Antarmuka Ramah Remote TV:** Tampilan minimalis berlatar gelap yang mendukung remote TV (`LEANBACK_LAUNCHER`), lengkap dengan tombol manual: *Simpan Waktu Sekarang* dan *Sinkronkan Jam Online Sekarang*.
-* **GitHub Actions CI/CD:** Menggunakan alur kerja cloud otomatis (`build_apk.yml`) dengan JDK 17 dan Gradle 8.4 terbaru untuk merakit kode sumber langsung menjadi file `.apk` tanpa perlu menginstal Android Studio di laptop.
+* **Pencatat Waktu Berkala:** Menyimpan tanggal & jam ke memori TV setiap 3 menit di latar belakang[cite: 38].
+* **Proteksi Tanggal Rusak:** Memiliki filter validasi agar jam yang sedang reset tidak sengaja menimpa catatan waktu yang valid.
+* **Auto-Restore saat Booting (`BootReceiver`):** Mengembalikan waktu terakhir + kompensasi waktu booting (+30 detik) secara instan saat TV dinyalakan[cite: 39].
+* **Smart Online NTP Sync (`SntpHelper`):** Sinkronisasi otomatis begitu internet aktif menggunakan server waktu NTP internasional[cite: 38].
+* **Dual Execution Mode (`TimeHelper`):** Mendukung izin standar `SET_TIME` via ADB (Non-Root) maupun izin Superuser (`su`) otomatis jika TV sudah di-root[cite: 2, 40].
+* **Ringan & Stabil:** Murni mengatur sinkronisasi jam tanpa mengganggu atau mematikan proses aplikasi lain di RAM.
+* **GitHub Actions CI/CD:** Dilengkapi skrip otomatis untuk merakit kode sumber menjadi file `.apk` langsung di server cloud tanpa perlu instal Android Studio di laptop[cite: 2].
 
 ---
 
 ## 📂 Struktur Proyek
 
-* `.github/workflows/build_apk.yml` — Skrip otomatisasi GitHub Actions untuk mengompilasi APK debug di server cloud.
-* `app/src/main/AndroidManifest.xml` — Konfigurasi izin sistem (`SET_TIME`, `RECEIVE_BOOT_COMPLETED`, `INTERNET`, `ACCESS_NETWORK_STATE`).
+* `.github/workflows/build_apk.yml` — Konfigurasi build APK otomatis di GitHub Actions.
+* `app/src/main/AndroidManifest.xml` — Konfigurasi izin sistem (`SET_TIME`, `RECEIVE_BOOT_COMPLETED`, `INTERNET`, `ACCESS_NETWORK_STATE`)[cite: 36].
 * `app/src/main/java/com/example/offlinetimekeeper/`
-  * `MainActivity.kt` — Antarmuka pengguna di layar TV untuk memantau status dan pemicu manual.
-  * `BootReceiver.kt` — Penerima sinyal booting TV untuk memulihkan jam offline pertama kali.
-  * `TimeSaverService.kt` — Layanan latar belakang untuk penyimpanan rutin tiap 3 menit dan pendengar sinyal internet.
-  * `TimeHelper.kt` — Eksekutor pengatur jam sistem (metode API Android dan Root shell).
-  * `SntpHelper.kt` — Modul klien SNTP UDP untuk mengambil waktu online resmi dari server NTP.
+  * `MainActivity.kt` — Antarmuka pengguna TV dengan tombol simpan dan sinkronisasi manual[cite: 37].
+  * `BootReceiver.kt` — Memulihkan waktu offline saat booting[cite: 39].
+  * `TimeSaverService.kt` — Layanan latar belakang untuk pencatatan berkala dan pendeteksi internet[cite: 38].
+  * `TimeHelper.kt` — Modul eksekusi waktu (API Android & Root shell)[cite: 40].
+  * `SntpHelper.kt` — Modul klien NTP untuk mengambil data waktu resmi dari internet[cite: 41].
 
 ---
 
-## 🚀 Cara Mendapatkan File `.apk` (Via GitHub Actions)
+## 🚀 Cara Mengunduh File `.apk` (Via GitHub Actions)
 
-1. Buka tab **Actions** di bilah menu bagian atas repositori GitHub ini.
-2. Klik proses build terbaru yang bertanda **centang hijau (✅)**.
-3. Gulir layar ke bagian paling bawah ke tabel **Artifacts**.
-4. Klik tautan file biner yang tersedia (misalnya: `OfflineTimeKeeper-NoRAM-APK` atau `OfflineTimeKeeper-Standard-APK`) untuk mengunduh arsip zip.
-5. Ekstrak file zip tersebut di laptop/komputer untuk mendapatkan file instalasi **`app-debug.apk`**.
+1. Buka tab **Actions** di bagian atas repositori ini[cite: 2].
+2. Klik proses build terbaru yang bertanda **centang hijau (✅)**[cite: 2].
+3. Gulir layar ke bagian paling bawah ke tabel **Artifacts**[cite: 2].
+4. Klik tautan file yang muncul (misalnya: `OfflineTimeKeeper-NoRAM-APK` atau `OfflineTimeKeeper-Standard-APK`) untuk mengunduh arsip zip[cite: 2].
+5. Ekstrak file zip tersebut di laptop untuk mendapatkan file instalasi **`app-debug.apk`**[cite: 2].
 
 ---
 
-## 🛠️ Cara Instalasi & Penggunaan di Android TV
+## 🛠️ Panduan Pemasangan di Android TV
 
-1. Salin file **`app-debug.apk`** ke flashdisk, lalu colokkan dan instal di Android TV / STB Anda menggunakan aplikasi File Manager.
+1. Pindahkan file **`app-debug.apk`** ke flashdisk, lalu pasang di TV Anda menggunakan aplikasi File Manager[cite: 2].
 2. **Pemberian Izin Sistem (Hanya dilakukan 1 kali saja):**
-   * **Untuk TV Non-Root:** Hubungkan TV ke laptop atau HP via ADB (kabel USB atau Wi-Fi ADB), lalu ketik perintah:
+   * **Untuk TV Non-Root:** Hubungkan TV ke laptop via ADB, lalu ketik perintah[cite: 2]:
      ```bash
      adb shell pm grant com.example.offlinetimekeeper android.permission.SET_TIME
      ```
-   * **Untuk TV yang Sudah di-Root (Magisk):** Tidak memerlukan perintah ADB di atas. Aplikasi akan otomatis meminta konfirmasi izin Superuser (`su`) saat pertama kali berjalan.
-3. Buka aplikasi **Offline Time Keeper** satu kali di menu aplikasi TV Anda.
-4. Klik tombol **Simpan Waktu Sekarang** (pastikan jam TV saat itu sudah benar).
-5. Selesai! TV kini siap digunakan seperti biasa. Setiap kali TV dimatikan total dan dinyalakan kembali, jam akan langsung terpulihkan secara otomatis, lalu disinkronkan ke waktu online terkini begitu internet terhubung.
+   * **Untuk TV yang Sudah di-Root (Magisk):** Tidak memerlukan perintah ADB[cite: 2, 40]. Aplikasi otomatis meminta hak akses Superuser (`su`)[cite: 40].
+3. Buka aplikasi **Offline Time Keeper** 1 kali di layar TV[cite: 2, 37].
+4. Klik tombol **Simpan Waktu Sekarang** (pastikan jam TV saat itu sudah dalam kondisi benar)[cite: 37].
+5. Selesai! TV kini dapat digunakan dan dimatikan seperti biasa secara otomatis[cite: 2].
 
 ---
 
 ## 📜 Lisensi
 
-Proyek ini dirilis di bawah lisensi **MIT License** — bebas digunakan, dimodifikasi, dan didistribusikan untuk kebutuhan pribadi maupun komunitas.
+Proyek ini dirilis di bawah lisensi **MIT License** — bebas digunakan dan dimodifikasi untuk kebutuhan pribadi maupun komunitas.
